@@ -1,26 +1,14 @@
 package com.zyhang.arouter.autowiredtransform
 
 import com.android.SdkConstants
-import com.android.build.api.transform.DirectoryInput
-import com.android.build.api.transform.Format
-import com.android.build.api.transform.JarInput
-import com.android.build.api.transform.QualifiedContent
-import com.android.build.api.transform.Transform
-import com.android.build.api.transform.TransformException
-import com.android.build.api.transform.TransformInput
-import com.android.build.api.transform.TransformInvocation
+import com.android.build.api.transform.*
 import com.android.build.gradle.internal.pipeline.TransformManager
 import org.apache.commons.io.FileUtils
 import org.apache.commons.io.IOCase
 import org.apache.commons.io.IOUtils
 import org.apache.commons.io.filefilter.SuffixFileFilter
 import org.apache.commons.io.filefilter.TrueFileFilter
-import org.gradle.api.Project
-import org.objectweb.asm.ClassReader
-import org.objectweb.asm.ClassVisitor
-import org.objectweb.asm.ClassWriter
-import org.objectweb.asm.MethodVisitor
-import org.objectweb.asm.Opcodes
+import org.objectweb.asm.*
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.jar.JarEntry
@@ -28,11 +16,7 @@ import java.util.jar.JarFile
 import java.util.jar.JarOutputStream
 import java.util.zip.ZipEntry
 
-import static org.objectweb.asm.Opcodes.ALOAD
-import static org.objectweb.asm.Opcodes.DUP
-import static org.objectweb.asm.Opcodes.INVOKESPECIAL
-import static org.objectweb.asm.Opcodes.INVOKEVIRTUAL
-import static org.objectweb.asm.Opcodes.NEW
+import static org.objectweb.asm.Opcodes.*
 
 class AutowiredTransform extends Transform {
 
@@ -40,14 +24,12 @@ class AutowiredTransform extends Transform {
     static final String fileNameSuffix = '$$ARouter$$Autowired'
     static final String fileNameSuffixClass = fileNameSuffix + SdkConstants.DOT_CLASS
 
-    Project project
     String appPackage = 'com.zyhang.arouter.autowiredtransform.app'
 
     private Set<String> autowiredClasses = Collections.newSetFromMap(new ConcurrentHashMap<>())
 
-    AutowiredTransform(Project project) {
-        this.project = project
-        this.appPackage = this.appPackage.replace('.', File.separator)
+    AutowiredTransform(String applicationId) {
+        appPackage = applicationId.replace('.', di)
     }
 
     @Override

@@ -5,8 +5,6 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 apply plugin: 'kotlin-kapt'
 
-apply plugin: AutowiredPlugin
-
 android {
     compileSdkVersion 29
 
@@ -51,3 +49,5 @@ dependencies {
     implementation 'com.alibaba:arouter-api:1.5.0'
     kapt 'com.alibaba:arouter-compiler:1.2.2'
 }
+
+apply plugin: AutowiredPlugin
