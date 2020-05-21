@@ -1,3 +1,4 @@
 rootProject.name='ARouter-AutowiredTransform'
 include ':app'
 include ':gradle-plugin'
+include ':buildSrc'

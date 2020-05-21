@@ -33,7 +33,7 @@ class MainFragment : Fragment() {
     private lateinit var viewModel: MainViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        ARouter.getInstance().inject(this)
+//        ARouter.getInstance().inject(this)
         super.onCreate(savedInstanceState)
     }
 
