@@ -53,14 +53,15 @@ class AutowiredTransform extends Transform {
     }
 
     @Override
-    void transform(TransformInvocation transformInvocation) throws TransformException, InterruptedException, IOException {
+    void transform(TransformInvocation transformInvocation)
+            throws TransformException, InterruptedException, IOException {
         transformInvocation.outputProvider.deleteAll()
         transformInvocation.inputs.each { TransformInput input ->
             input.jarInputs.each { JarInput jarInput ->
-                File src = jarInput.getFile()
-                File dst = transformInvocation.getOutputProvider().getContentLocation(
-                        jarInput.getName(), jarInput.getContentTypes(),
-                        jarInput.getScopes(), Format.JAR)
+                File src = jarInput.file
+                File dst = transformInvocation.outputProvider.getContentLocation(
+                        jarInput.name, jarInput.contentTypes,
+                        jarInput.scopes, Format.JAR)
                 try {
                     scanAutowiredFromJar(src)
                     injectFromJar(src)
@@ -70,10 +71,10 @@ class AutowiredTransform extends Transform {
                 }
             }
             input.directoryInputs.each { DirectoryInput directoryInput ->
-                File src = directoryInput.getFile()
-                File dst = transformInvocation.getOutputProvider().getContentLocation(
-                        directoryInput.getName(), directoryInput.getContentTypes(),
-                        directoryInput.getScopes(), Format.DIRECTORY)
+                File src = directoryInput.file
+                File dst = transformInvocation.outputProvider.getContentLocation(
+                        directoryInput.name, directoryInput.contentTypes,
+                        directoryInput.scopes, Format.DIRECTORY)
                 try {
                     scanAutowiredFromDir(src)
                     injectFromDir(src)
@@ -90,7 +91,7 @@ class AutowiredTransform extends Transform {
         Enumeration<JarEntry> entries = jarFile.entries()
         while (entries.hasMoreElements()) {
             JarEntry jarEntry = entries.nextElement()
-            String jarEntryName = jarEntry.getName()
+            String jarEntryName = jarEntry.name
             if (jarEntryName.endsWith(fileNameSuffixClass)) {
                 String target = trimName(jarEntryName, 0)
                 autowiredClasses.add(target)
@@ -118,7 +119,7 @@ class AutowiredTransform extends Transform {
         if (autowiredClasses.isEmpty()) {
             return
         }
-        File optJar = new File(src.getParent(), src.getName() + ".opt")
+        File optJar = new File(src.parent, src.name + ".opt")
         if (optJar.exists()) {
             optJar.delete()
         }
@@ -128,7 +129,7 @@ class AutowiredTransform extends Transform {
 
         while (entries.hasMoreElements()) {
             JarEntry jarEntry = entries.nextElement()
-            String jarEntryName = jarEntry.getName()
+            String jarEntryName = jarEntry.name
             InputStream inputStream = jarFile.getInputStream(jarEntry)
             jarOutputStream.putNextEntry(new ZipEntry(jarEntryName))
             if (jarEntryName.endsWith(SdkConstants.DOT_CLASS) &&
@@ -180,7 +181,7 @@ class AutowiredTransform extends Transform {
     static byte[] inject(InputStream inputStream) throws IOException {
         ClassReader cr = new ClassReader(inputStream)
         ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS)
-        ClassVisitor cv = new InjectVisitor(Opcodes.ASM5, cw)
+        ClassVisitor cv = new InjectVisitor(ASM5, cw)
         cr.accept(cv, ClassReader.EXPAND_FRAMES)
         return cw.toByteArray()
     }
@@ -216,7 +217,8 @@ class AutowiredTransform extends Transform {
         @Override
         void visitEnd() {
             if (!findOnCreate) {
-                MethodVisitor mv = cv.visitMethod(ACC_PROTECTED, "onCreate", "(Landroid/os/Bundle;)V", null, null)
+                MethodVisitor mv = cv.visitMethod(ACC_PROTECTED, "onCreate",
+                        "(Landroid/os/Bundle;)V", null, null)
                 mv.visitCode()
 
                 String injector = className.concat(fileNameSuffix)
@@ -230,7 +232,8 @@ class AutowiredTransform extends Transform {
 
                 mv.visitVarInsn(ALOAD, 0)
                 mv.visitVarInsn(ALOAD, 1)
-                mv.visitMethodInsn(INVOKESPECIAL, superName, "onCreate", "(Landroid/os/Bundle;)V", false)
+                mv.visitMethodInsn(INVOKESPECIAL, superName, "onCreate",
+                        "(Landroid/os/Bundle;)V", false)
                 mv.visitInsn(RETURN)
                 mv.visitMaxs(2, 2)
                 mv.visitEnd()
