@@ -1,35 +1,18 @@
 package com.zyhang.arouter.autowiredtransform
 
-import com.android.SdkConstants
 import com.android.build.api.transform.*
 import com.android.build.gradle.internal.pipeline.TransformManager
+import com.android.ide.common.internal.WaitableExecutor
 import org.apache.commons.io.FileUtils
-import org.apache.commons.io.IOCase
-import org.apache.commons.io.IOUtils
-import org.apache.commons.io.filefilter.SuffixFileFilter
-import org.apache.commons.io.filefilter.TrueFileFilter
-import org.objectweb.asm.*
-
-import java.util.concurrent.ConcurrentHashMap
-import java.util.jar.JarEntry
-import java.util.jar.JarFile
-import java.util.jar.JarOutputStream
-import java.util.zip.ZipEntry
-
-import static org.objectweb.asm.Opcodes.*
 
 class AutowiredTransform extends Transform {
 
-    static final String di = '/'
-    static final String fileNameSuffix = '$$ARouter$$Autowired'
-    static final String fileNameSuffixClass = fileNameSuffix + SdkConstants.DOT_CLASS
-
-    String appPackage = 'com.zyhang.arouter.autowiredtransform.app'
-
-    private Set<String> autowiredClasses = Collections.newSetFromMap(new ConcurrentHashMap<>())
+    private String appPackage = 'com.zyhang.arouter.autowiredtransform.app'
+    private WaitableExecutor executor
 
     AutowiredTransform(String applicationId) {
-        appPackage = applicationId.replace('.', di)
+        appPackage = applicationId.replace('.', '/')
+        executor = WaitableExecutor.useGlobalSharedThreadPool()
     }
 
     @Override
@@ -49,219 +32,106 @@ class AutowiredTransform extends Transform {
 
     @Override
     boolean isIncremental() {
-        return false
+        return true
     }
 
     @Override
     void transform(TransformInvocation transformInvocation)
             throws TransformException, InterruptedException, IOException {
-        transformInvocation.outputProvider.deleteAll()
+        long ms = System.currentTimeMillis()
+        boolean isIncremental = transformInvocation.incremental
+        if (!isIncremental) {
+            transformInvocation.outputProvider.deleteAll()
+        }
+        // scan
+        AutowiredWeaver.scan(transformInvocation)
+        // transform
         transformInvocation.inputs.each { TransformInput input ->
             input.jarInputs.each { JarInput jarInput ->
                 File src = jarInput.file
-                File dst = transformInvocation.outputProvider.getContentLocation(
+                File dest = transformInvocation.outputProvider.getContentLocation(
                         jarInput.name, jarInput.contentTypes,
                         jarInput.scopes, Format.JAR)
-                try {
-                    scanAutowiredFromJar(src)
-                    injectFromJar(src)
-                    FileUtils.copyFile(src, dst)
-                } catch (IOException e) {
-                    throw new RuntimeException(e)
+                if (isIncremental) {
+                    switch (jarInput.status) {
+                        case Status.NOTCHANGED:
+                            break
+                        case Status.ADDED:
+                        case Status.CHANGED:
+                            transformJar(src, dest)
+                            break
+                        case Status.REMOVED:
+                            if (dest.exists()) {
+                                FileUtils.forceDelete(dest)
+                            }
+                            break
+                    }
+                } else {
+                    transformJar(src, dest)
                 }
             }
             input.directoryInputs.each { DirectoryInput directoryInput ->
                 File src = directoryInput.file
-                File dst = transformInvocation.outputProvider.getContentLocation(
+                File dest = transformInvocation.outputProvider.getContentLocation(
                         directoryInput.name, directoryInput.contentTypes,
                         directoryInput.scopes, Format.DIRECTORY)
-                try {
-                    scanAutowiredFromDir(src)
-                    injectFromDir(src)
-                    FileUtils.copyDirectory(src, dst)
-                } catch (IOException e) {
-                    throw new RuntimeException(e)
+                FileUtils.forceMkdir(dest)
+                String srcDirPath = src.absolutePath
+                String destDirPath = dest.absolutePath
+                if (isIncremental) {
+                    directoryInput.changedFiles.each {
+                        File inputFile = it.key
+                        Status status = it.value
+                        String destFilePath = inputFile.absolutePath.replace(srcDirPath, destDirPath)
+                        File destFile = new File(destFilePath)
+                        switch (status) {
+                            case Status.NOTCHANGED:
+                                break
+                            case Status.REMOVED:
+                                if (destFile.exists()) {
+                                    destFile.delete()
+                                }
+                                break
+                            case Status.ADDED:
+                            case Status.CHANGED:
+                                FileUtils.touch(destFile)
+                                transformSingleFile(src, inputFile, destFile)
+                                break
+                        }
+                    }
+                } else {
+                    transformDir(src, dest)
+                }
+            }
+        }
+
+        executor.waitForTasksWithQuickFail(true)
+        println('AutowiredTransform cost ' + (System.currentTimeMillis() - ms) + 'ms')
+    }
+
+    private void transformJar(File srcJar, File destJar) {
+        executor.execute {
+            AutowiredWeaver.weaveJar(srcJar, destJar)
+        }
+    }
+
+    private void transformDir(File inputDir, File outputDir) throws IOException {
+        def inputDirPath = inputDir.absolutePath
+        def outputDirPath = outputDir.absolutePath
+        if (inputDir.isDirectory()) {
+            inputDir.eachFileRecurse { file ->
+                executor.execute {
+                    def filePath = file.absolutePath
+                    def outputFile = new File(filePath.replace(inputDirPath, outputDirPath))
+                    AutowiredWeaver.weaveSingleClassToFile(inputDir, file, outputFile)
                 }
             }
         }
     }
 
-    void scanAutowiredFromJar(File src) {
-        JarFile jarFile = new JarFile(src)
-        Enumeration<JarEntry> entries = jarFile.entries()
-        while (entries.hasMoreElements()) {
-            JarEntry jarEntry = entries.nextElement()
-            String jarEntryName = jarEntry.name
-            if (jarEntryName.endsWith(fileNameSuffixClass)) {
-                String target = trimName(jarEntryName, 0)
-                autowiredClasses.add(target)
-            }
-        }
-        jarFile.close()
-    }
-
-    void scanAutowiredFromDir(File src) {
-        File dir = new File(src, appPackage)
-        if (dir.exists() && dir.isDirectory()) {
-            Collection<File> files = FileUtils.listFiles(dir,
-                    new SuffixFileFilter(fileNameSuffixClass, IOCase.INSENSITIVE),
-                    TrueFileFilter.INSTANCE)
-            files.each { File file ->
-                String target = trimName(file.absolutePath,
-                        src.absolutePath.length() + 1)
-                        .replace(File.separator, di)
-                autowiredClasses.add(target)
-            }
-        }
-    }
-
-    void injectFromJar(File src) {
-        if (autowiredClasses.isEmpty()) {
-            return
-        }
-        File optJar = new File(src.parent, src.name + ".opt")
-        if (optJar.exists()) {
-            optJar.delete()
-        }
-        JarFile jarFile = new JarFile(src)
-        Enumeration<JarEntry> entries = jarFile.entries()
-        JarOutputStream jarOutputStream = new JarOutputStream(new FileOutputStream(optJar))
-
-        while (entries.hasMoreElements()) {
-            JarEntry jarEntry = entries.nextElement()
-            String jarEntryName = jarEntry.name
-            InputStream inputStream = jarFile.getInputStream(jarEntry)
-            jarOutputStream.putNextEntry(new ZipEntry(jarEntryName))
-            if (jarEntryName.endsWith(SdkConstants.DOT_CLASS) &&
-                    autowiredClasses.contains(trimName(jarEntryName, 0)
-                            .concat(fileNameSuffix))) {
-                byte[] bytes = inject(jarFile.getInputStream(jarEntry))
-                jarOutputStream.write(bytes)
-            } else {
-                jarOutputStream.write(IOUtils.toByteArray(inputStream))
-            }
-            inputStream.close()
-            jarOutputStream.closeEntry()
-        }
-        jarOutputStream.close()
-        jarFile.close()
-        src.delete()
-        optJar.renameTo(src)
-    }
-
-    void injectFromDir(File src) {
-        if (autowiredClasses.isEmpty()) {
-            return
-        }
-        File dir = new File(src, appPackage)
-        if (dir.exists() && dir.isDirectory()) {
-            Collection<File> files = FileUtils.listFiles(dir,
-                    new SuffixFileFilter(SdkConstants.DOT_CLASS, IOCase.INSENSITIVE),
-                    TrueFileFilter.INSTANCE)
-            for (File file : files) {
-                if (autowiredClasses.contains(trimName(file.absolutePath,
-                        src.absolutePath.length() + 1)
-                        .replace(File.separator, di)
-                        .concat(fileNameSuffix))) {
-                    InputStream inputStream = new FileInputStream(file)
-                    byte[] bytes = inject(inputStream)
-                    OutputStream outputStream = new FileOutputStream(file)
-                    outputStream.write(bytes)
-                    outputStream.close()
-                    inputStream.close()
-                }
-            }
-        }
-    }
-
-    static String trimName(String s, int start) {
-        return s.substring(start, s.length() - SdkConstants.DOT_CLASS.length())
-    }
-
-    static byte[] inject(InputStream inputStream) throws IOException {
-        ClassReader cr = new ClassReader(inputStream)
-        ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS)
-        ClassVisitor cv = new InjectVisitor(ASM5, cw)
-        cr.accept(cv, ClassReader.EXPAND_FRAMES)
-        return cw.toByteArray()
-    }
-
-    static class InjectVisitor extends ClassVisitor implements Opcodes {
-
-        String className, superName
-        boolean findOnCreate
-
-        InjectVisitor(int api, ClassVisitor classVisitor) {
-            super(api, classVisitor)
-        }
-
-        @Override
-        void visit(int version, int access, String name, String signature, String superName,
-                   String[] interfaces) {
-            super.visit(version, access, name, signature, superName, interfaces)
-            this.className = name
-            this.superName = superName
-        }
-
-        @Override
-        MethodVisitor visitMethod(int access, String name, String desc,
-                                  String signature, String[] exceptions) {
-            MethodVisitor mv = super.visitMethod(access, name, desc, signature, exceptions)
-            if ("onCreate" == name && "(Landroid/os/Bundle;)V" == desc) {
-                findOnCreate = true
-                mv = new InjectMethodVisitor(ASM5, mv, className.concat(fileNameSuffix))
-            }
-            return mv
-        }
-
-        @Override
-        void visitEnd() {
-            if (!findOnCreate) {
-                MethodVisitor mv = cv.visitMethod(ACC_PROTECTED, "onCreate",
-                        "(Landroid/os/Bundle;)V", null, null)
-                mv.visitCode()
-
-                String injector = className.concat(fileNameSuffix)
-                mv.visitTypeInsn(NEW, injector)
-                mv.visitInsn(DUP)
-                mv.visitMethodInsn(INVOKESPECIAL, injector, "<init>",
-                        "()V", false)
-                mv.visitVarInsn(ALOAD, 0)
-                mv.visitMethodInsn(INVOKEVIRTUAL, injector, "inject",
-                        "(Ljava/lang/Object;)V", false)
-
-                mv.visitVarInsn(ALOAD, 0)
-                mv.visitVarInsn(ALOAD, 1)
-                mv.visitMethodInsn(INVOKESPECIAL, superName, "onCreate",
-                        "(Landroid/os/Bundle;)V", false)
-                mv.visitInsn(RETURN)
-                mv.visitMaxs(2, 2)
-                mv.visitEnd()
-                cv.visitEnd()
-            }
-            super.visitEnd()
-        }
-    }
-
-    private static class InjectMethodVisitor extends MethodVisitor {
-        String injector
-
-        InjectMethodVisitor(int api, MethodVisitor methodVisitor, String injector) {
-            super(api, methodVisitor)
-            this.injector = injector
-        }
-
-        @Override
-        void visitCode() {
-            mv.visitTypeInsn(NEW, injector)
-            mv.visitInsn(DUP)
-            mv.visitMethodInsn(INVOKESPECIAL, injector, "<init>",
-                    "()V", false)
-            mv.visitVarInsn(ALOAD, 0)
-            mv.visitMethodInsn(INVOKEVIRTUAL, injector, "inject",
-                    "(Ljava/lang/Object;)V", false)
-
-            super.visitCode()
+    private void transformSingleFile(File dir, File inputFile, File outputFile) {
+        executor.execute {
+            AutowiredWeaver.weaveSingleClassToFile(dir, inputFile, outputFile)
         }
     }
 }
