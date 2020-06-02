@@ -25,10 +25,9 @@ class AutowiredWeaver {
     private static final String TAG = 'AutowiredWeaver'
 
     // xxx.xxx.xxx.class
-    private static Set<String> autowiredClasses = Collections.newSetFromMap(new ConcurrentHashMap<>())
+    private Set<String> autowiredClasses = Collections.newSetFromMap(new ConcurrentHashMap<>())
 
-    static void scan(TransformInvocation transformInvocation) {
-        autowiredClasses.clear()
+    void scan(TransformInvocation transformInvocation) {
         transformInvocation.inputs.each { TransformInput input ->
             input.jarInputs.each { JarInput jarInput ->
                 File src = jarInput.file
@@ -59,7 +58,7 @@ class AutowiredWeaver {
         }
     }
 
-    static void weaveJar(File inputJar, File outputJar) throws IOException {
+    void weaveJar(File inputJar, File outputJar) throws IOException {
         ZipFile inputZip = new ZipFile(inputJar)
         ZipOutputStream outputZip = new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(outputJar.toPath())))
         Enumeration<? extends ZipEntry> inEntries = inputZip.entries()
@@ -91,7 +90,7 @@ class AutowiredWeaver {
         outputZip.close()
     }
 
-    static void weaveSingleClassToFile(File dir, File inputFile, File outputFile) throws IOException {
+    void weaveSingleClassToFile(File dir, File inputFile, File outputFile) throws IOException {
         String fullQualifiedClassName = Utils.fullQualifiedClassName(dir, inputFile)
         if (isWeavableClass(fullQualifiedClassName)) {
             FileUtils.touch(outputFile)
@@ -109,7 +108,7 @@ class AutowiredWeaver {
         }
     }
 
-    private static byte[] weaveSingleClassToByteArray(String fullQualifiedClassName, InputStream inputStream) throws IOException {
+    private byte[] weaveSingleClassToByteArray(String fullQualifiedClassName, InputStream inputStream) throws IOException {
         if (Utils.matchView(autowiredClasses, fullQualifiedClassName)) {
             ClassReader classReader = new ClassReader(IOUtils.toByteArray(inputStream))
             ClassWriter classWriter = new ClassWriter(classReader, ClassWriter.COMPUTE_MAXS)

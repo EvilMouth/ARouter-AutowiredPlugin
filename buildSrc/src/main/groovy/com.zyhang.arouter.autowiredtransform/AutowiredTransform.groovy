@@ -8,10 +8,12 @@ import org.apache.commons.io.FileUtils
 class AutowiredTransform extends Transform {
 
     private String appPackage = 'com.zyhang.arouter.autowiredtransform.app'
+    private AutowiredWeaver autowiredWeaver
     private WaitableExecutor executor
 
     AutowiredTransform(String applicationId) {
         appPackage = applicationId.replace('.', '/')
+        autowiredWeaver = new AutowiredWeaver()
         executor = WaitableExecutor.useGlobalSharedThreadPool()
     }
 
@@ -44,7 +46,7 @@ class AutowiredTransform extends Transform {
             transformInvocation.outputProvider.deleteAll()
         }
         // scan
-        AutowiredWeaver.scan(transformInvocation)
+        autowiredWeaver.scan(transformInvocation)
         // transform
         transformInvocation.inputs.each { TransformInput input ->
             input.jarInputs.each { JarInput jarInput ->
@@ -111,7 +113,7 @@ class AutowiredTransform extends Transform {
 
     private void transformJar(File srcJar, File destJar) {
         executor.execute {
-            AutowiredWeaver.weaveJar(srcJar, destJar)
+            autowiredWeaver.weaveJar(srcJar, destJar)
         }
     }
 
@@ -123,7 +125,7 @@ class AutowiredTransform extends Transform {
                 executor.execute {
                     def filePath = file.absolutePath
                     def outputFile = new File(filePath.replace(inputDirPath, outputDirPath))
-                    AutowiredWeaver.weaveSingleClassToFile(inputDir, file, outputFile)
+                    autowiredWeaver.weaveSingleClassToFile(inputDir, file, outputFile)
                 }
             }
         }
@@ -131,7 +133,7 @@ class AutowiredTransform extends Transform {
 
     private void transformSingleFile(File dir, File inputFile, File outputFile) {
         executor.execute {
-            AutowiredWeaver.weaveSingleClassToFile(dir, inputFile, outputFile)
+            autowiredWeaver.weaveSingleClassToFile(dir, inputFile, outputFile)
         }
     }
 }
