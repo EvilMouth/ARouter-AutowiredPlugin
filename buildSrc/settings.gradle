@@ -1,2 +1,0 @@
-include ':autowired-plugin'
-project(':autowired-plugin').projectDir = file('../autowired-plugin')
