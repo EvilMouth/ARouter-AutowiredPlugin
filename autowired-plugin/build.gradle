@@ -1,6 +1,4 @@
-plugins {
-    id 'kotlin'
-}
+apply plugin: 'kotlin'
 
 dependencies {
     compileOnly gradleApi()
