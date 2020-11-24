@@ -4,6 +4,9 @@ buildscript {
     repositories {
         google()
         jcenter()
+        maven {
+            url "https://dl.bintray.com/zyhang/maven"
+        }
     }
     dependencies {
         classpath "com.android.tools.build:gradle:$gradle_version"
@@ -14,6 +17,10 @@ buildscript {
 
         classpath "com.bytedance.android.byteX:base-plugin:$bytex_version"
         classpath "com.jfrog.bintray.gradle:gradle-bintray-plugin:$jfrog_version"
+
+        if (!Boolean.parseBoolean('buildSrcMode')) {
+            classpath "maven.evilmouth.arouter:autowired-plugin:1.0.0"
+        }
     }
 }
 
