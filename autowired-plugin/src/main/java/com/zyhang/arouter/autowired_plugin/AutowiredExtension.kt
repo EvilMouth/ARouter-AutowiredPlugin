@@ -7,4 +7,12 @@ import com.ss.android.ugc.bytex.common.BaseExtension
  */
 open class AutowiredExtension : BaseExtension() {
     override fun getName(): String = "AutowiredExtension"
+
+    private var consumesFeatureJars = false
+
+    fun consumesFeatureJars(consumesFeatureJars: Boolean) {
+        this.consumesFeatureJars = consumesFeatureJars
+    }
+
+    fun isConsumesFeatureJars() = consumesFeatureJars
 }
