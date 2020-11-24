@@ -49,7 +49,9 @@ dependencies {
 }
 
 apply plugin: 'bytex'
-apply plugin: 'com.zyhang.arouter.autowired_plugin'
-AutowiredExtension {
-    enableInDebug true
+if (Boolean.parseBoolean(buildSrcMode)) {
+    apply plugin: 'com.zyhang.arouter.autowired_plugin'
+    AutowiredExtension {
+        enableInDebug true
+    }
 }

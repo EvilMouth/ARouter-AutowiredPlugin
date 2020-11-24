@@ -1,3 +1,5 @@
+if (!Boolean.parseBoolean(buildSrcMode)) {
+    include ':autowired-plugin'
+}
 include ':app'
-//include ':autowired-plugin'
-rootProject.name='ARouter-AutowiredPlugin'
+rootProject.name = 'ARouter-AutowiredPlugin'

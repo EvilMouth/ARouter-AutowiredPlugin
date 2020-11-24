@@ -7,3 +7,7 @@ dependencies {
 
     implementation "com.bytedance.android.byteX:common:$bytex_version"
 }
+
+if (!Boolean.parseBoolean(buildSrcMode)) {
+    apply from: "./publish.gradle"
+}

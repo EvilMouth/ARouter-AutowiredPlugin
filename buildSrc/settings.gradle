@@ -1,2 +1,7 @@
-include ':autowired-plugin'
-project(':autowired-plugin').projectDir = file('../autowired-plugin')
+def rootProp = new Properties()
+rootProp.load(file('../gradle.properties').newInputStream())
+def buildSrcMode = rootProp.getProperty('buildSrcMode')
+if (Boolean.parseBoolean(buildSrcMode)) {
+    include ':autowired-plugin'
+    project(':autowired-plugin').projectDir = file('../autowired-plugin')
+}

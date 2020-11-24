@@ -1,12 +1,14 @@
 apply plugin: 'kotlin'
 
 buildscript {
-    def prop = new Properties()
-    prop.load(file('../gradle.properties').newInputStream())
+    def rootProp = new Properties()
+    rootProp.load(file('../gradle.properties').newInputStream())
     ext {
-        gradle_version = prop.getProperty('gradle_version')
-        kotlin_version = prop.getProperty('kotlin_version')
-        bytex_version = prop.getProperty('bytex_version')
+        gradle_version = rootProp.getProperty('gradle_version')
+        kotlin_version = rootProp.getProperty('kotlin_version')
+        bytex_version = rootProp.getProperty('bytex_version')
+        jfrog_version = rootProp.getProperty('jfrog_version')
+        buildSrcMode = rootProp.getProperty('buildSrcMode')
     }
     repositories {
         google()
@@ -33,5 +35,7 @@ dependencies {
     implementation "com.android.tools.build:gradle:$gradle_version"
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 
-    implementation project(':autowired-plugin')
+    if (Boolean.parseBoolean(buildSrcMode)) {
+        implementation project(':autowired-plugin')
+    }
 }
