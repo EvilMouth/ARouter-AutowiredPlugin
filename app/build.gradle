@@ -49,3 +49,4 @@ dependencies {
 }
 
 apply plugin: 'bytex'
+apply plugin: 'com.zyhang.arouter.autowired_plugin'

@@ -31,6 +31,7 @@ allprojects {
 dependencies {
     implementation gradleApi()
     implementation "com.android.tools.build:gradle:$gradle_version"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 
-//    implementation project(':autowired-plugin')
+    implementation project(':autowired-plugin')
 }

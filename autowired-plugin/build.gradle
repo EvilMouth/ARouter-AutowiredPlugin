@@ -4,5 +4,6 @@ dependencies {
     compileOnly gradleApi()
     compileOnly "com.android.tools.build:gradle:$gradle_version"
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+
     implementation "com.bytedance.android.byteX:common:$bytex_version"
 }
